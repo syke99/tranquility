@@ -10,42 +10,30 @@ import (
 func main() {
 	mux := http.NewServeMux()
 
+	codec := &MyCodec[Fizz, Buzz]{}
+
 	mux.Handle("GET /hello", NewHandler(
 		HelloWorldHandler,
 		WithHeaderFunc(HelloWorldHeaders),
-		WithCodec[Fizz, Buzz](&MyCodec{}),
+		WithCodec[Fizz, Buzz](codec),
 		WithErrorHandler[Fizz, Buzz](ErrorHandler),
 	))
 }
 
-type MyCodec struct{}
+type MyCodec[In any, Out any] struct{}
 
-func (c *MyCodec) Marshal(out *Buzz) ([]byte, error) {
+func (c *MyCodec[In, Out]) Marshal(out *Out) ([]byte, error) {
 	// for simplicity sake, wrapping json.Unmarshall call
 	// but this is where/how you can implement a custom
 	// MarshallFunc
 	return json.Marshal(out)
 }
 
-func (c *MyCodec) Unmarshal(data []byte, in *Fizz) error {
+func (c *MyCodec[In, Out]) Unmarshal(data []byte, in *In) error {
 	// for simplicity sake, wrapping json.Unmarshall call
 	// but this is where/how you can implement a custom
 	// UnmarshallFunc
 	return json.Unmarshal(data, in)
-}
-
-func (c *MyCodec) UnmarshallFizz(data []byte, fizz *Fizz) error {
-	// for simplicity sake, wrapping json.Unmarshall call
-	// but this is where/how you can implement a custom
-	// UnmarshallFunc
-	return json.Unmarshal(data, fizz)
-}
-
-func (c *MyCodec) MarshallBuzz(buzz *Buzz) ([]byte, error) {
-	// for simplicity sake, wrapping json.Unmarshall call
-	// but this is where/how you can implement a custom
-	// MarshallFunc
-	return json.Marshal(buzz)
 }
 
 type Fizz struct {
