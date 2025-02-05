@@ -7,17 +7,15 @@ import (
 	"net/http"
 )
 
-// TODO: doc comments
-
 // Handler groups a generic handler func with any func for custom headers
 // or error handling added. The structure of the incoming request body
 // gets unmarshalled to In, and Out will get marshalled to the response body;
 // because of this, the default method for marshalling and unmarshalling using
 // tranquility is via json. However, a custom (Un)MarshallFunc can be provided
 // using the WithCustom(Un)MarshallFunc option(s) whenever creating a new handler
-// with tranquility to allow you to use any type of serialization. Additional
-// information about the request such as any headers, the url, the method used,
-// etc can be accessed through the injected Context
+// with tranquility to allow you to use any type of serialization. If you need
+// access to the entire incoming request, you can find it in the injected context
+// using the "request" key
 type Handler[In any, Out any] struct {
 	handler       func(ctx context.Context, in *In) (*Out, error)
 	headerFunc    func(ctx context.Context, in *In, out *Out) map[string]string
@@ -73,8 +71,7 @@ func NewHandler[In any, Out any](handler func(ctx context.Context, in *In) (*Out
 }
 
 func (h *Handler[In, Out]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// TODO: inject rest of info about request to ctx
-	ctx := r.Context()
+	ctx := context.WithValue(context.Background(), "request", r)
 
 	in := new(In)
 
