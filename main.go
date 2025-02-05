@@ -7,21 +7,39 @@ import (
 	"net/http"
 )
 
+// Codec interface can be used to provide custom
+// serialization of an In and an Out so that
+// you don't have to rely on tranquility's default
+// json serialization format
+type Codec[In any, Out any] interface {
+	Marshal(out *Out) ([]byte, error)
+	Unmarshal(data []byte, in *In) error
+}
+
 // Handler groups a generic handler func with any func for custom headers,
 // serialization(both marshalling and unmarshalling), and custom error handling
 // added. The structure of the incoming request body gets unmarshalled to In,
 // and Out will get marshalled to the response body. Because of this, the default
 // method for marshalling and unmarshalling using tranquility is via json. However,
-// a custom (Un)MarshallFunc can be provided using the WithCustom(Un)MarshallFunc
-// option(s) whenever creating a new handler with tranquility to allow you to use
-// any type of serialization. If you need access to the entire incoming request,
-// you can find it in the injected context using the "request" key
+// a Codec may be provided to implement custom serialization. If you need access to
+// the entire incoming request, you can find it in the injected context using the
+// "request" key
 type Handler[In any, Out any] struct {
 	handler       func(ctx context.Context, in *In) (*Out, error)
 	headerFunc    func(ctx context.Context, in *In, out *Out) map[string]string
-	marshallFunc  func() ([]byte, error)
-	unmarshalFunc func(data []byte) (int, error)
+	codec         Codec[In, Out]
+	marshallFunc  func(out *Out) ([]byte, error)
+	unmarshalFunc func(data []byte, in *In) error
 	errorHandler  func(err error) (int, error)
+}
+
+// WithCodec allows you to provide a codec for your tranquility
+// handler to be able to inject custom serialization of your
+// incoming request body and outgoing response body
+func WithCodec[In any, Out any](codec Codec[In, Out]) func(*Handler[In, Out]) {
+	return func(h *Handler[In, Out]) {
+		h.codec = codec
+	}
 }
 
 // WithHeaderFunc allows you to define any custom headers to
@@ -39,22 +57,6 @@ func WithHeaderFunc[In any, Out any](headerFunc func(ctx context.Context, in *In
 func WithErrorHandler[In any, Out any](errorHandler func(err error) (int, error)) func(*Handler[In, Out]) {
 	return func(h *Handler[In, Out]) {
 		h.errorHandler = errorHandler
-	}
-}
-
-// WithCustomUnmarshallFunc allows you to provide a custom method
-// for unmarshalling instead of letting tranquility default to json
-func WithCustomUnmarshallFunc[In any, Out any](unmarshallFunc func(data []byte) (int, error)) func(*Handler[In, Out]) {
-	return func(h *Handler[In, Out]) {
-		h.unmarshalFunc = unmarshallFunc
-	}
-}
-
-// WithCustomMarshallFunc allows you to provide a custom method
-// for marshalling instead of letting tranquility default to json
-func WithCustomMarshallFunc[In any, Out any](marshallFunc func() ([]byte, error)) func(*Handler[In, Out]) {
-	return func(h *Handler[In, Out]) {
-		h.marshallFunc = marshallFunc
 	}
 }
 
@@ -81,8 +83,8 @@ func (h *Handler[In, Out]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.unmarshalFunc != nil {
-		_, err = h.unmarshalFunc(body)
+	if h.codec != nil {
+		err = h.codec.Unmarshal(body, in)
 	} else {
 		err = json.Unmarshal(body, in)
 	}
@@ -106,8 +108,8 @@ func (h *Handler[In, Out]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	var resultBytes []byte
 
-	if h.marshallFunc != nil {
-		resultBytes, err = h.marshallFunc()
+	if h.codec != nil {
+		resultBytes, err = h.codec.Marshal(out)
 	} else {
 		resultBytes, err = json.Marshal(out)
 	}
