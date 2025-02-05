@@ -7,15 +7,6 @@ import (
 	"net/http"
 )
 
-// Codec interface can be used to provide custom
-// serialization of an In and an Out so that
-// you don't have to rely on tranquility's default
-// json serialization format
-type Codec[In any, Out any] interface {
-	Marshal(out *Out) ([]byte, error)
-	Unmarshal(data []byte, in *In) error
-}
-
 // Handler groups a generic handler func with any func for custom headers,
 // serialization(both marshalling and unmarshalling), and custom error handling
 // added. The structure of the incoming request body gets unmarshalled to In,
@@ -25,39 +16,10 @@ type Codec[In any, Out any] interface {
 // the entire incoming request, you can find it in the injected context using the
 // "request" key
 type Handler[In any, Out any] struct {
-	handler       func(ctx context.Context, in *In) (*Out, error)
-	headerFunc    func(ctx context.Context, in *In, out *Out) map[string]string
-	codec         Codec[In, Out]
-	marshallFunc  func(out *Out) ([]byte, error)
-	unmarshalFunc func(data []byte, in *In) error
-	errorHandler  func(err error) (int, error)
-}
-
-// WithCodec allows you to provide a codec for your tranquility
-// handler to be able to inject custom serialization of your
-// incoming request body and outgoing response body
-func WithCodec[In any, Out any](codec Codec[In, Out]) func(*Handler[In, Out]) {
-	return func(h *Handler[In, Out]) {
-		h.codec = codec
-	}
-}
-
-// WithHeaderFunc allows you to define any custom headers to
-// be added to a successful request before the response is written back
-func WithHeaderFunc[In any, Out any](headerFunc func(ctx context.Context, in *In, out *Out) map[string]string) func(*Handler[In, Out]) {
-	return func(h *Handler[In, Out]) {
-		h.headerFunc = headerFunc
-	}
-}
-
-// WithErrorHandler allows you to inject custom error handling
-// into your tranquility Handler. This is where you define the specific
-// status code to be returned with an error, along with any error
-// manipulation you may want to perform
-func WithErrorHandler[In any, Out any](errorHandler func(err error) (int, error)) func(*Handler[In, Out]) {
-	return func(h *Handler[In, Out]) {
-		h.errorHandler = errorHandler
-	}
+	handler      func(ctx context.Context, in *In) (*Out, error)
+	headerFunc   func(ctx context.Context, in *In, out *Out) map[string]string
+	codec        Codec[In, Out]
+	errorHandler func(err error) (int, error)
 }
 
 func NewHandler[In any, Out any](handler func(ctx context.Context, in *In) (*Out, error), opts ...func(Handler *Handler[In, Out])) http.Handler {
