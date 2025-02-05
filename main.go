@@ -12,13 +12,18 @@ import (
 // Handler groups a generic handler func with any func for custom headers
 // or error handling added. The structure of the incoming request body
 // gets unmarshalled to In, and Out will get marshalled to the response body;
-// because of this, tranquility relies on json. Additional information about
-// the request such as any headers, the url, the method used, etc can be accessed
-// through the injected Context
+// because of this, the default method for marshalling and unmarshalling using
+// tranquility is via json. However, a custom (Un)MarshallFunc can be provided
+// using the WithCustom(Un)MarshallFunc option(s) whenever creating a new handler
+// with tranquility to allow you to use any type of serialization. Additional
+// information about the request such as any headers, the url, the method used,
+// etc can be accessed through the injected Context
 type Handler[In any, Out any] struct {
-	handler      func(ctx context.Context, in *In) (*Out, error)
-	headerFunc   func(ctx context.Context, in *In, out *Out) map[string]string
-	errorHandler func(err error) (int, error)
+	handler       func(ctx context.Context, in *In) (*Out, error)
+	headerFunc    func(ctx context.Context, in *In, out *Out) map[string]string
+	marshallFunc  func() ([]byte, error)
+	unmarshalFunc func(data []byte) (int, error)
+	errorHandler  func(err error) (int, error)
 }
 
 // WithHeaderFunc allows you to define any custom headers to
@@ -36,6 +41,22 @@ func WithHeaderFunc[In any, Out any](headerFunc func(ctx context.Context, in *In
 func WithErrorHandler[In any, Out any](errorHandler func(err error) (int, error)) func(*Handler[In, Out]) {
 	return func(h *Handler[In, Out]) {
 		h.errorHandler = errorHandler
+	}
+}
+
+// WithCustomUnmarshallFunc allows you to provide a custom method
+// for unmarshalling instead of letting tranquility default to json
+func WithCustomUnmarshallFunc[In any, Out any](unmarshallFunc func(data []byte) (int, error)) func(*Handler[In, Out]) {
+	return func(h *Handler[In, Out]) {
+		h.unmarshalFunc = unmarshallFunc
+	}
+}
+
+// WithCustomMarshallFunc allows you to provide a custom method
+// for marshalling instead of letting tranquility default to json
+func WithCustomMarshallFunc[In any, Out any](marshallFunc func() ([]byte, error)) func(*Handler[In, Out]) {
+	return func(h *Handler[In, Out]) {
+		h.marshallFunc = marshallFunc
 	}
 }
 
@@ -63,7 +84,12 @@ func (h *Handler[In, Out]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = json.Unmarshal(body, in)
+	if h.unmarshalFunc != nil {
+		_, err = h.unmarshalFunc(body)
+	} else {
+		err = json.Unmarshal(body, in)
+	}
+
 	if err != nil {
 		http.Error(w, "unable to unmarshal request body", http.StatusBadRequest)
 		return
@@ -81,7 +107,14 @@ func (h *Handler[In, Out]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	res, err := json.Marshal(out)
+	var resultBytes []byte
+
+	if h.marshallFunc != nil {
+		resultBytes, err = h.marshallFunc()
+	} else {
+		resultBytes, err = json.Marshal(out)
+	}
+
 	if err != nil {
 		http.Error(w, "unable to marshal response", http.StatusInternalServerError)
 		return
@@ -95,5 +128,5 @@ func (h *Handler[In, Out]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	_, _ = w.Write(res)
+	_, _ = w.Write(resultBytes)
 }
