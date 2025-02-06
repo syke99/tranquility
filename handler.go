@@ -19,7 +19,7 @@ type Handler[In any, Out any] struct {
 	handler      func(ctx context.Context, in *In) (*Out, error)
 	headerFunc   func(ctx context.Context, in *In, out *Out) map[string]string
 	codec        Codec[In, Out]
-	errorHandler func(err error) (int, error)
+	errorHandler func(ctx context.Context, err error) (int, error)
 }
 
 func NewHandler[In any, Out any](handler func(ctx context.Context, in *In) (*Out, error), opts ...func(Handler *Handler[In, Out])) http.Handler {
@@ -36,6 +36,8 @@ func NewHandler[In any, Out any](handler func(ctx context.Context, in *In) (*Out
 
 func (h *Handler[In, Out]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := context.WithValue(context.Background(), "request", r)
+
+	ctx.Value("request")
 
 	in := new(In)
 
@@ -62,7 +64,7 @@ func (h *Handler[In, Out]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			resCode := http.StatusInternalServerError
 			resErr := err
 
-			resCode, resErr = h.errorHandler(err)
+			resCode, resErr = h.errorHandler(ctx, err)
 			http.Error(w, resErr.Error(), resCode)
 			return
 		}

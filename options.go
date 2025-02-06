@@ -23,7 +23,7 @@ func WithHeaderFunc[In any, Out any](headerFunc func(ctx context.Context, in *In
 // into your tranquility Handler. This is where you define the specific
 // status code to be returned with an error, along with any error
 // manipulation you may want to perform
-func WithErrorHandler[In any, Out any](errorHandler func(err error) (int, error)) func(*Handler[In, Out]) {
+func WithErrorHandler[In any, Out any](errorHandler func(ctx context.Context, err error) (int, error)) func(*Handler[In, Out]) {
 	return func(h *Handler[In, Out]) {
 		h.errorHandler = errorHandler
 	}

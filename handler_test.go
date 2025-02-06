@@ -53,7 +53,7 @@ var TestHeaderFunc = func(ctx context.Context, in *Fizz, out *Buzz) map[string]s
 	}
 }
 
-var TestErrorHandler = func(err error) (int, error) {
+var TestErrorHandler = func(ctx context.Context, err error) (int, error) {
 	if errors.Is(BadLanguage, err) {
 		// do any custom error handling based on the specific types of errors and
 		// return the appropriate status code, and the newly handled error
